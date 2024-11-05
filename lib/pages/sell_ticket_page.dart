@@ -1,31 +1,26 @@
+// lib/pages/sell_ticket_page.dart
 import 'package:flutter/material.dart';
-import '../services/ticket_service.dart';
 import '../models/train_ticket.dart';
-import 'home_page.dart';
+import '../models/train_stop.dart';
+import '../widgets/train_stop_form.dart';
+import '../services/ticket_service.dart';
+import '../pages/home_page.dart'; // Add this import
 
 
 class SellTicketPage extends StatefulWidget {
-  final VoidCallback? onTicketSold;
-  
-  const SellTicketPage({
-    super.key,
-    this.onTicketSold,
-  });
+  const SellTicketPage({super.key});
 
   @override
   State<SellTicketPage> createState() => _SellTicketPageState();
 }
 
 class _SellTicketPageState extends State<SellTicketPage> {
-  final TicketService _ticketService = TicketService();
   final _formKey = GlobalKey<FormState>();
-  String? _fromStation;
-  String? _toStation;
-  DateTime? _selectedDate;
-  TimeOfDay? _selectedTime;
+  final _ticketService = TicketService();
   final _priceController = TextEditingController();
+  DateTime? _selectedDate;
   bool _isLoading = false;
-  
+
   final List<String> _stations = [
     'Roma',
     'Milano',
@@ -40,6 +35,42 @@ class _SellTicketPageState extends State<SellTicketPage> {
     'Pisa',
     'Bari'
   ];
+
+  // List to store stop data
+  final List<Map<String, dynamic>> _stops = [];
+
+  @override
+  void initState() {
+    super.initState();
+    // Add initial start and end stops
+    _stops.add({'isStart': true, 'isEnd': false});
+    _stops.add({'isStart': false, 'isEnd': true});
+  }
+
+  void _addIntermediateStop() {
+    setState(() {
+      // Insert new stop before the last one (end stop)
+      _stops.insert(_stops.length - 1, {
+        'isStart': false,
+        'isEnd': false,
+      });
+    });
+  }
+
+  void _removeStop(int index) {
+    if (!_stops[index]['isStart'] && !_stops[index]['isEnd']) {
+      setState(() {
+        _stops.removeAt(index);
+      });
+    }
+  }
+
+  void _updateStop(int index, String station, TimeOfDay time) {
+    setState(() {
+      _stops[index]['station'] = station;
+      _stops[index]['time'] = time;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -66,22 +97,46 @@ class _SellTicketPageState extends State<SellTicketPage> {
                 ),
                 padding: const EdgeInsets.all(16),
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildStationField(
-                      label: 'Stazione di Partenza',
-                      value: _fromStation,
-                      onChanged: (value) => setState(() => _fromStation = value),
+                    const Text(
+                      'Fermate',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     const SizedBox(height: 16),
-                    _buildStationField(
-                      label: 'Stazione di Arrivo',
-                      value: _toStation,
-                      onChanged: (value) => setState(() => _toStation = value),
+                    // Build stop forms
+                    ..._stops.asMap().entries.map((entry) {
+                      final index = entry.key;
+                      final stop = entry.value;
+                      return TrainStopForm(
+                        isStart: stop['isStart'] ?? false,
+                        isEnd: stop['isEnd'] ?? false,
+                        stations: _stations,
+                        onStopChanged: (station, time) => 
+                            _updateStop(index, station, time),
+                        onRemove: (!stop['isStart'] && !stop['isEnd']) 
+                            ? () => _removeStop(index)
+                            : null,
+                      );
+                    }).toList(),
+                    const SizedBox(height: 8),
+                    // Add stop button
+                    Center(
+                      child: TextButton.icon(
+                        onPressed: _addIntermediateStop,
+                        icon: const Icon(Icons.add, color: Colors.white),
+                        label: const Text(
+                          'Aggiungi Fermata',
+                          style: TextStyle(color: Colors.white),
+                        ),
+                      ),
                     ),
                     const SizedBox(height: 16),
                     _buildDateField(),
-                    const SizedBox(height: 16),
-                    _buildTimeField(),
                     const SizedBox(height: 16),
                     _buildPriceField(),
                   ],
@@ -122,43 +177,6 @@ class _SellTicketPageState extends State<SellTicketPage> {
           ),
         ),
       ),
-    );
-  }
-
-  Widget _buildStationField({
-    required String label,
-    required String? value,
-    required Function(String?) onChanged,
-  }) {
-    return DropdownButtonFormField<String>(
-      value: value,
-      decoration: InputDecoration(
-        labelText: label,
-        labelStyle: const TextStyle(color: Colors.white60),
-        border: const OutlineInputBorder(
-          borderSide: BorderSide(color: Colors.white24),
-        ),
-        enabledBorder: const OutlineInputBorder(
-          borderSide: BorderSide(color: Colors.white24),
-        ),
-        filled: true,
-        fillColor: const Color(0xFF1A237E),
-      ),
-      dropdownColor: const Color(0xFF1A237E),
-      style: const TextStyle(color: Colors.white),
-      items: _stations.map((station) {
-        return DropdownMenuItem(
-          value: station,
-          child: Text(station),
-        );
-      }).toList(),
-      onChanged: onChanged,
-      validator: (value) {
-        if (value == null || value.isEmpty) {
-          return 'Campo obbligatorio';
-        }
-        return null;
-      },
     );
   }
 
@@ -204,10 +222,11 @@ class _SellTicketPageState extends State<SellTicketPage> {
     );
   }
 
-  Widget _buildTimeField() {
+  Widget _buildPriceField() {
     return TextFormField(
+      controller: _priceController,
       decoration: const InputDecoration(
-        labelText: 'Orario',
+        labelText: 'Prezzo (€)',
         labelStyle: TextStyle(color: Colors.white60),
         border: OutlineInputBorder(
           borderSide: BorderSide(color: Colors.white24),
@@ -217,123 +236,86 @@ class _SellTicketPageState extends State<SellTicketPage> {
         ),
         filled: true,
         fillColor: Color(0xFF1A237E),
-        suffixIcon: Icon(Icons.access_time, color: Colors.white60),
+        prefixIcon: Icon(Icons.euro, color: Colors.white60),
       ),
       style: const TextStyle(color: Colors.white),
-      readOnly: true,
-      onTap: () async {
-        final TimeOfDay? picked = await showTimePicker(
-          context: context,
-          initialTime: _selectedTime ?? TimeOfDay.now(),
-        );
-        if (picked != null) {
-          setState(() => _selectedTime = picked);
-        }
-      },
-      controller: TextEditingController(
-        text: _selectedTime != null 
-            ? _selectedTime!.format(context)
-            : '',
-      ),
+      keyboardType: TextInputType.number,
       validator: (value) {
-        if (_selectedTime == null) {
-          return 'Seleziona un orario';
+        if (value == null || value.isEmpty) {
+          return 'Inserisci un prezzo';
+        }
+        try {
+          final price = double.parse(value);
+          if (price <= 0) {
+            return 'Il prezzo deve essere maggiore di 0';
+          }
+        } catch (e) {
+          return 'Inserisci un prezzo valido';
         }
         return null;
       },
     );
   }
 
-  // In sell_ticket_page.dart
-
-Future<void> _submitTicket() async {
-  if (_formKey.currentState!.validate()) {
-    setState(() => _isLoading = true);
-    
-    try {
-      // Format price to have 2 decimal places
-      final price = double.parse(_priceController.text.trim()).toStringAsFixed(2);
-      
-      final newTicket = TrainTicket(
-        from: _fromStation!,
-        to: _toStation!,
-        date: _selectedDate!.toString().split(' ')[0],
-        time: _selectedTime!.format(context),
-        price: price, // Now passing a formatted string
-        seller: 'Tu',
-      );
-
-      await _ticketService.addTicket(newTicket);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Biglietto pubblicato con successo!'),
-            backgroundColor: Color(0xFF00BFA5),
-          ),
-        );
-        
-        HomePage.navigateToTickets(context);
+  Future<void> _submitTicket() async {
+    if (_formKey.currentState!.validate()) {
+      // Validate all stops have station and time
+      for (final stop in _stops) {
+        if (stop['station'] == null || stop['time'] == null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Completa tutte le fermate'),
+              backgroundColor: Colors.red,
+            ),
+          );
+          return;
+        }
       }
 
-      // Clear the form
-      setState(() {
-        _fromStation = null;
-        _toStation = null;
-        _selectedDate = null;
-        _selectedTime = null;
-        _priceController.clear();
-        _isLoading = false;
-      });
-    } catch (e) {
-      setState(() => _isLoading = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Errore durante la pubblicazione: $e'),
-            backgroundColor: Colors.red,
-          ),
+      setState(() => _isLoading = true);
+      
+      try {
+        final stops = _stops.map((stop) => TrainStop(
+          station: stop['station'],
+          time: stop['time'].format(context),
+          isStart: stop['isStart'] ?? false,
+          isEnd: stop['isEnd'] ?? false,
+        )).toList();
+
+        final newTicket = TrainTicket(
+          stops: stops,
+          date: _selectedDate!.toString().split(' ')[0],
+          price: _priceController.text.trim(),
+          seller: 'Tu',
         );
+
+        await _ticketService.addTicket(newTicket);
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Biglietto pubblicato con successo!'),
+              backgroundColor: Color(0xFF00BFA5),
+            ),
+          );
+          
+          HomePage.navigateToTickets(context);
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Errore durante la pubblicazione: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      } finally {
+        setState(() => _isLoading = false);
       }
     }
   }
-}
 
-// Also update the price field validation
-Widget _buildPriceField() {
-  return TextFormField(
-    controller: _priceController,
-    decoration: const InputDecoration(
-      labelText: 'Prezzo (€)',
-      labelStyle: TextStyle(color: Colors.white60),
-      border: OutlineInputBorder(
-        borderSide: BorderSide(color: Colors.white24),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderSide: BorderSide(color: Colors.white24),
-      ),
-      filled: true,
-      fillColor: Color(0xFF1A237E),
-      prefixIcon: Icon(Icons.euro, color: Colors.white60),
-    ),
-    style: const TextStyle(color: Colors.white),
-    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-    validator: (value) {
-      if (value == null || value.isEmpty) {
-        return 'Inserisci un prezzo';
-      }
-      try {
-        final price = double.parse(value);
-        if (price <= 0) {
-          return 'Il prezzo deve essere maggiore di 0';
-        }
-      } catch (e) {
-        return 'Inserisci un prezzo valido';
-      }
-      return null;
-    },
-  );
-}
   @override
   void dispose() {
     _priceController.dispose();

@@ -1,3 +1,4 @@
+// lib/services/ticket_service.dart
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/train_ticket.dart';
 
@@ -8,7 +9,7 @@ class TicketService {
 
   final _supabase = Supabase.instance.client;
 
-  // Get all tickets
+  // Stream all tickets
   Stream<List<TrainTicket>> get ticketsStream {
     return _supabase
       .from('tickets')
@@ -19,37 +20,95 @@ class TicketService {
       });
   }
 
+  // Get tickets by date
+  Future<List<TrainTicket>> getTicketsByDate({required String date}) async {
+    try {
+      final response = await _supabase
+          .from('tickets')
+          .select()
+          .eq('date', date);
+      
+      return (response as List)
+          .map((data) => TrainTicket.fromJson(data))
+          .toList();
+    } catch (e) {
+      throw 'Error fetching tickets: $e';
+    }
+  }
+
   // Add a new ticket
   Future<void> addTicket(TrainTicket ticket) async {
     try {
-      await _supabase.from('tickets').insert({
-        'from_station': ticket.from,
-        'to_station': ticket.to,
-        'date': ticket.date,
-        'time': ticket.time,
-        'price': ticket.price,
-        'seller': ticket.seller,
-      });
+      await _supabase.from('tickets').insert(ticket.toJson());
     } catch (e) {
       throw 'Error adding ticket: $e';
     }
   }
 
-  // Search tickets
-  Future<List<TrainTicket>> searchTickets({
-    required String from,
-    required String to,
-    required String date,
-  }) async {
+  // Delete ticket
+  Future<void> deleteTicket(int ticketId) async {
+    try {
+      await _supabase
+          .from('tickets')
+          .delete()
+          .eq('id', ticketId);
+    } catch (e) {
+      throw 'Error deleting ticket: $e';
+    }
+  }
+
+  // Update ticket
+  Future<void> updateTicket(int ticketId, TrainTicket ticket) async {
+    try {
+      await _supabase
+          .from('tickets')
+          .update(ticket.toJson())
+          .eq('id', ticketId);
+    } catch (e) {
+      throw 'Error updating ticket: $e';
+    }
+  }
+
+  // Get single ticket by id
+  Future<TrainTicket?> getTicketById(int ticketId) async {
     try {
       final response = await _supabase
           .from('tickets')
           .select()
-          .eq('from_station', from)
-          .eq('to_station', to)
-          .eq('date', date);
+          .eq('id', ticketId)
+          .single();
       
-      return (response as List).map((row) => TrainTicket.fromJson(row)).toList();
+      return TrainTicket.fromJson(response);
+    } catch (e) {
+      throw 'Error fetching ticket: $e';
+    }
+  }
+
+  // Search tickets by route and date
+  Future<List<TrainTicket>> searchTickets({
+    String? fromStation,
+    String? toStation,
+    String? date,
+  }) async {
+    try {
+      var query = _supabase.from('tickets').select();
+
+      if (date != null) {
+        query = query.eq('date', date);
+      }
+
+      final response = await query;
+      final tickets = (response as List)
+          .map((data) => TrainTicket.fromJson(data))
+          .toList();
+
+      // Filter tickets that serve the requested route if stations are provided
+      if (fromStation != null && toStation != null) {
+        return tickets.where((ticket) => 
+          ticket.servesRoute(fromStation, toStation)).toList();
+      }
+
+      return tickets;
     } catch (e) {
       throw 'Error searching tickets: $e';
     }
