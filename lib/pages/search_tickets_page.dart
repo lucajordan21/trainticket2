@@ -21,11 +21,11 @@ class _SearchTicketsPageState extends State<SearchTicketsPage> {
   bool _isLoading = false;
 
   final List<String> _stations = [
-    'Roma Termini',
+    'Roma',
     'Milano Centrale',
     'Napoli Centrale',
     'Torino Porta Nuova',
-    'Firenze Santa Maria Novella',
+    'Firenze',
     'Venezia Santa Lucia',
     'Bologna Centrale',
     'Genova Piazza Principe',
