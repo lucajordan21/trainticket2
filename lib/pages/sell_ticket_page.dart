@@ -259,21 +259,48 @@ class _SellTicketPageState extends State<SellTicketPage> {
       decoration: const InputDecoration(
         labelText: 'Orario',
         labelStyle: TextStyle(color: Colors.white60),
-        border: OutlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
-        enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
+        border: OutlineInputBorder(
+          borderSide: BorderSide(color: Colors.white24),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderSide: BorderSide(color: Colors.white24),
+        ),
         filled: true,
         fillColor: Color(0xFF1A237E),
+        suffixIcon: Icon(Icons.access_time, color: Colors.white60),
       ),
       style: const TextStyle(color: Colors.white),
       readOnly: true,
-      controller: TextEditingController(text: stop['time']?.format(context) ?? ''),
+      controller: TextEditingController(
+        text: stop['time'] != null 
+            ? TrainStop.formatTime(stop['time']) 
+            : '',
+      ),
       onTap: () async {
-        final TimeOfDay? picked = await showTimePicker(context: context, initialTime: TimeOfDay.now());
+        final TimeOfDay? picked = await showTimePicker(
+          context: context,
+          initialTime: stop['time'] ?? TimeOfDay.now(),
+          builder: (context, child) {
+            return MediaQuery(
+              data: MediaQuery.of(context).copyWith(
+                alwaysUse24HourFormat: true,
+              ),
+              child: child!,
+            );
+          },
+        );
         if (picked != null) {
-          setState(() => stop['time'] = picked);
+          setState(() {
+            stop['time'] = picked;
+          });
         }
       },
-      validator: (value) => stop['time'] == null ? 'Seleziona un orario' : null,
+      validator: (value) {
+        if (stop['time'] == null) {
+          return 'Seleziona un orario';
+        }
+        return null;
+      },
     );
   }
 
@@ -309,25 +336,75 @@ class _SellTicketPageState extends State<SellTicketPage> {
   }
 
   Future<void> _submitTicket() async {
-    if (!_formKey.currentState!.validate()) return;
-    setState(() => _isLoading = true);
+    if (_formKey.currentState!.validate()) {
+      // Validate all stops have station and time
+      for (final stop in _stops) {
+        if (stop['station'] == null || stop['time'] == null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Completa tutte le fermate'),
+              backgroundColor: Colors.red,
+            ),
+          );
+          return;
+        }
+      }
 
-    try {
-      final ticket = TrainTicket(
-        date: _selectedDate!.toString().split(' ')[0],
-        price: _priceController.text.trim(),
-        stops: _stops.map((stop) => TrainStop(station: stop['station']!, time: stop['time']!)).toList(),
-        seller: 'seller_id_or_name_here', // Add the seller's value here
-   
-      );
+      setState(() => _isLoading = true);
+      
+      try {
+        final stops = _stops.map((stop) => TrainStop(
+          station: stop['station'],
+          time: TrainStop.formatTime(stop['time']),
+          isStart: stop['isStart'] ?? false,
+          isEnd: stop['isEnd'] ?? false,
+        )).toList();
 
-      await _ticketService.addTicket(ticket);
-      _showSnackbar('Biglietto venduto con successo!', Colors.green);
-      Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (_) => const HomePage()), (route) => false);
-    } catch (e) {
-      _showSnackbar('Errore nella vendita del biglietto: ${e.toString()}', Colors.red);
-    } finally {
-      setState(() => _isLoading = false);
+        // Validate stops order
+        for (int i = 0; i < stops.length - 1; i++) {
+          if (!stops[i].isBefore(stops[i + 1])) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('L\'orario di ogni fermata deve essere successivo alla fermata precedente'),
+                backgroundColor: Colors.red,
+              ),
+            );
+            setState(() => _isLoading = false);
+            return;
+          }
+        }
+
+        final newTicket = TrainTicket(
+          stops: stops,
+          date: _selectedDate!.toString().split(' ')[0],
+          price: _priceController.text.trim(),
+          seller: 'Tu',
+        );
+
+        await _ticketService.addTicket(newTicket);
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Biglietto pubblicato con successo!'),
+              backgroundColor: Color(0xFF00BFA5),
+            ),
+          );
+          
+          HomePage.navigateToTickets(context);
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Errore durante la pubblicazione: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      } finally {
+        setState(() => _isLoading = false);
+      }
     }
   }
 

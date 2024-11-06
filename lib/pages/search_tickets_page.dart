@@ -22,12 +22,12 @@ class _SearchTicketsPageState extends State<SearchTicketsPage> {
 
   final List<String> _stations = [
     'Roma',
-    'Milano Centrale',
+    'Milano',
     'Napoli Centrale',
     'Torino Porta Nuova',
-    'Firenze',
+    'Firenze Santa Maria Novella',
     'Venezia Santa Lucia',
-    'Bologna Centrale',
+    'Bologna',
     'Genova Piazza Principe',
     'Palermo Centrale',
     'Verona Porta Nuova',
@@ -35,34 +35,6 @@ class _SearchTicketsPageState extends State<SearchTicketsPage> {
     'Bari Centrale'
   ];
 
-// Add these helper methods right after your class variables
-  String getStartStation(TrainTicket ticket) {
-    return ticket.stops.firstWhere((stop) => stop.station == _fromStation,
-            orElse: () => ticket.stops.first)
-        .station;
-  }
-
-  String getEndStation(TrainTicket ticket) {
-    return ticket.stops.firstWhere((stop) => stop.station == _toStation,
-            orElse: () => ticket.stops.last)
-        .station;
-  }
-
-  bool isFullRoute(TrainTicket ticket) {
-    final startStation = getStartStation(ticket);
-    final endStation = getEndStation(ticket);
-    return startStation == ticket.stops.first.station &&
-        endStation == ticket.stops.last.station;
-  }
-
-  String formatDuration(int minutes) {
-    if (minutes < 60) {
-      return '$minutes min';
-    }
-    final hours = minutes ~/ 60;
-    final remainingMinutes = minutes % 60;
-    return '$hours h ${remainingMinutes.toString().padLeft(2, '0')} min';
-  }
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -72,22 +44,28 @@ class _SearchTicketsPageState extends State<SearchTicketsPage> {
           SliverAppBar(
             backgroundColor: const Color(0xFF1A237E),
             pinned: true,
-            title: const Text(
-              'Orari e Biglietti',
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+            expandedHeight: 120,
+            flexibleSpace: FlexibleSpaceBar(
+              title: const Text(
+                'Cerca Biglietti',
+                style: TextStyle(color: Colors.white),
+              ),
+              background: Container(
+                color: const Color(0xFF1A237E),
+                padding: const EdgeInsets.all(16),
+                alignment: Alignment.bottomCenter,
+              ),
             ),
           ),
           SliverPadding(
-            padding: const EdgeInsets.all(16.0),
+            padding: const EdgeInsets.all(16),
             sliver: SliverList(
               delegate: SliverChildListDelegate([
-                _buildSearchContainer(),
-                const SizedBox(height: 16),
-                _buildSearchButton(),
+                _buildSearchForm(),
                 if (_isLoading)
                   const Center(
                     child: Padding(
-                      padding: EdgeInsets.all(16.0),
+                      padding: EdgeInsets.all(32),
                       child: CircularProgressIndicator(color: Colors.white),
                     ),
                   )
@@ -101,7 +79,7 @@ class _SearchTicketsPageState extends State<SearchTicketsPage> {
     );
   }
 
-  Widget _buildSearchContainer() {
+  Widget _buildSearchForm() {
     return Container(
       decoration: BoxDecoration(
         color: const Color(0xFF283593),
@@ -109,6 +87,7 @@ class _SearchTicketsPageState extends State<SearchTicketsPage> {
       ),
       padding: const EdgeInsets.all(16),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _buildStationField(
             label: 'Partenza',
@@ -116,15 +95,33 @@ class _SearchTicketsPageState extends State<SearchTicketsPage> {
             onChanged: (value) => setState(() => _fromStation = value),
             icon: Icons.train,
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
           _buildStationField(
             label: 'Arrivo',
             value: _toStation,
             onChanged: (value) => setState(() => _toStation = value),
             icon: Icons.place,
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
           _buildDateField(),
+          const SizedBox(height: 24),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _searchTickets,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF00BFA5),
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(25),
+                ),
+              ),
+              child: const Text(
+                'Cerca Biglietti',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -141,7 +138,12 @@ class _SearchTicketsPageState extends State<SearchTicketsPage> {
       decoration: InputDecoration(
         labelText: label,
         labelStyle: const TextStyle(color: Colors.white60),
-        border: InputBorder.none,
+        border: const OutlineInputBorder(
+          borderSide: BorderSide(color: Colors.white24),
+        ),
+        enabledBorder: const OutlineInputBorder(
+          borderSide: BorderSide(color: Colors.white24),
+        ),
         filled: true,
         fillColor: const Color(0xFF1A237E),
         prefixIcon: Icon(icon, color: Colors.white60),
@@ -159,15 +161,49 @@ class _SearchTicketsPageState extends State<SearchTicketsPage> {
   }
 
   Widget _buildDateField() {
-    return ListTile(
-      leading: const Icon(Icons.calendar_month, color: Colors.white60),
-      title: Text(
-        _selectedDate != null 
-            ? 'Data: ${_formatDate(_selectedDate!)}'
-            : 'Seleziona Data',
-        style: const TextStyle(color: Colors.white60),
+    return TextFormField(
+      decoration: const InputDecoration(
+        labelText: 'Data del viaggio',
+        labelStyle: TextStyle(color: Colors.white60),
+        border: OutlineInputBorder(
+          borderSide: BorderSide(color: Colors.white24),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderSide: BorderSide(color: Colors.white24),
+        ),
+        filled: true,
+        fillColor: Color(0xFF1A237E),
+        prefixIcon: Icon(Icons.calendar_today, color: Colors.white60),
       ),
-      onTap: _pickDate,
+      style: const TextStyle(color: Colors.white),
+      readOnly: true,
+      controller: TextEditingController(
+        text: _selectedDate != null 
+            ? _formatDate(_selectedDate!)
+            : '',
+      ),
+      onTap: () async {
+        final DateTime? picked = await showDatePicker(
+          context: context,
+          initialDate: _selectedDate ?? DateTime.now(),
+          firstDate: DateTime.now(),
+          lastDate: DateTime.now().add(const Duration(days: 90)),
+          builder: (context, child) {
+            return Theme(
+              data: Theme.of(context).copyWith(
+                colorScheme: const ColorScheme.dark(
+                  primary: Color(0xFF00BFA5),
+                  surface: Color(0xFF1A237E),
+                ),
+              ),
+              child: child!,
+            );
+          },
+        );
+        if (picked != null) {
+          setState(() => _selectedDate = picked);
+        }
+      },
     );
   }
 
@@ -179,38 +215,11 @@ class _SearchTicketsPageState extends State<SearchTicketsPage> {
     return '${date.day} ${months[date.month - 1]} ${date.year}';
   }
 
-  Future<void> _pickDate() async {
-    final DateTime? picked = await showDatePicker(
-      context: context,
-      initialDate: _selectedDate ?? DateTime.now(),
-      firstDate: DateTime.now(),
-      lastDate: DateTime.now().add(const Duration(days: 90)),
-    );
-    if (picked != null) {
-      setState(() => _selectedDate = picked);
-    }
-  }
-
-  Widget _buildSearchButton() {
-    return ElevatedButton(
-      onPressed: _searchTickets,
-      style: ElevatedButton.styleFrom(
-        backgroundColor: const Color(0xFF00BFA5),
-        minimumSize: const Size(double.infinity, 50),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
-      ),
-      child: const Text(
-        'Cerca Orari e Prezzi',
-        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-      ),
-    );
-  }
-
   Future<void> _searchTickets() async {
     if (_fromStation == null || _toStation == null || _selectedDate == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Seleziona tutti i campi per effettuare la ricerca'),
+          content: Text('Completa tutti i campi per cercare'),
           backgroundColor: Colors.red,
         ),
       );
@@ -226,11 +235,17 @@ class _SearchTicketsPageState extends State<SearchTicketsPage> {
 
       _searchResults = tickets
           .where((ticket) => ticket.servesRoute(_fromStation!, _toStation!))
-          .toList();
+          .toList()
+        ..sort((a, b) {
+          final aStart = a.stops.firstWhere((s) => s.station == _fromStation);
+          final bStart = b.stops.firstWhere((s) => s.station == _fromStation);
+          return aStart.timeOfDay.hour * 60 + aStart.timeOfDay.minute
+              .compareTo(bStart.timeOfDay.hour * 60 + bStart.timeOfDay.minute);
+        });
 
       setState(() {
         _hasSearched = true;
-        _isLoading = false;
+        _isLoading = false;  // Don't forget to set loading to false on success
       });
     } catch (e) {
       setState(() => _isLoading = false);
@@ -249,7 +264,7 @@ class _SearchTicketsPageState extends State<SearchTicketsPage> {
     if (_searchResults.isEmpty) {
       return Card(
         child: Padding(
-          padding: const EdgeInsets.all(16.0),
+          padding: const EdgeInsets.all(32),
           child: Column(
             children: [
               const Icon(
@@ -259,9 +274,9 @@ class _SearchTicketsPageState extends State<SearchTicketsPage> {
               ),
               const SizedBox(height: 16),
               Text(
-                'Nessun treno trovato da $_fromStation a $_toStation',
-                style: const TextStyle(fontSize: 16),
+                'Nessun treno trovato da\n$_fromStation a $_toStation\nil ${_formatDate(_selectedDate!)}',
                 textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 16),
               ),
             ],
           ),
@@ -272,110 +287,118 @@ class _SearchTicketsPageState extends State<SearchTicketsPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          '${_searchResults.length} risultati trovati',
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 16,
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          child: Text(
+            '${_searchResults.length} risultati trovati',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 16,
+            ),
           ),
         ),
-        const SizedBox(height: 8),
-        ListView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: _searchResults.length,
-          itemBuilder: (context, index) {
-            final ticket = _searchResults[index];
-            final firstStop = ticket.stops.firstWhere(
-              (stop) => stop.station == _fromStation,
-              orElse: () => ticket.stops.first,
-            );
-            final lastStop = ticket.stops.firstWhere(
-              (stop) => stop.station == _toStation,
-              orElse: () => ticket.stops.last,
-            );
-            
-            final duration = firstStop.getDurationInMinutes(lastStop);
-            
-            return Card(
-              margin: const EdgeInsets.symmetric(vertical: 4),
-              child: InkWell(
-                onTap: () => _showTicketDetails(ticket),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Column(
+        ...(_searchResults.map((ticket) {
+          final relevantStops = ticket.stops
+              .where((stop) => 
+                  stop.station == _fromStation || 
+                  stop.station == _toStation)
+              .toList();
+          
+          return Card(
+            margin: const EdgeInsets.only(bottom: 8),
+            child: InkWell(
+              onTap: () => _showTicketDetails(ticket),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                firstStop.formattedTime,
+                                relevantStops.first.time,
                                 style: const TextStyle(
-                                  fontSize: 20,
+                                  fontSize: 24,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
-                              Text(firstStop.station),
+                              Text(
+                                relevantStops.first.station,
+                                style: const TextStyle(color: Colors.grey),
+                              ),
                             ],
                           ),
-                          Column(
-                            children: [
-                              Text('$duration min'),
-                              const Icon(Icons.arrow_forward),
-                            ],
-                          ),
-                          Column(
+                        ),
+                        const Icon(Icons.arrow_forward),
+                        Expanded(
+                          child: Column(
                             crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
                               Text(
-                                lastStop.formattedTime,
+                                relevantStops.last.time,
                                 style: const TextStyle(
-                                  fontSize: 20,
+                                  fontSize: 24,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
-                              Text(lastStop.station),
+                              Text(
+                                relevantStops.last.station,
+                                style: const TextStyle(color: Colors.grey),
+                              ),
                             ],
                           ),
-                        ],
-                      ),
-                      if (firstStop.station != ticket.from ||
-                          lastStop.station != ticket.to)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 8),
-                          child: Text(
-                            'Treno completo: ${ticket.from} → ${ticket.to}',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey,
+                        ),
+                      ],
+                    ),
+                    if (ticket.stops.first.station != _fromStation ||
+                        ticket.stops.last.station != _toStation)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.info_outline, 
+                                     size: 16, color: Colors.grey),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Treno completo: ${ticket.stops.first.station} → ${ticket.stops.last.station}',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey,
+                                ),
+                              ),
                             ),
+                          ],
+                        ),
+                      ),
+                    const Divider(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          ticket.date,
+                          style: const TextStyle(color: Colors.grey),
+                        ),
+                        Text(
+                          '€${ticket.price}',
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF00BFA5),
                           ),
                         ),
-                      const Divider(),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            '€${ticket.price}',
-                            style: const TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFF00BFA5),
-                            ),
-                          ),
-                          Text('${ticket.numberOfStops} fermate'),
-                        ],
-                      ),
-                    ],
-                  ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
-            );
-          },
-        ),
+            ),
+          );
+        }).toList()),
       ],
     );
   }
@@ -392,123 +415,112 @@ class _SearchTicketsPageState extends State<SearchTicketsPage> {
         minChildSize: 0.3,
         maxChildSize: 0.9,
         expand: false,
-        builder: (context, scrollController) => _TicketDetailsSheet(
-          ticket: ticket,
-          fromStation: _fromStation!,
-          toStation: _toStation!,
-          scrollController: scrollController,
-        ),
-      ),
-    );
-  }
-}
-
-class _TicketDetailsSheet extends StatelessWidget {
-  final TrainTicket ticket;
-  final String fromStation;
-  final String toStation;
-  final ScrollController scrollController;
-
-  const _TicketDetailsSheet({
-    required this.ticket,
-    required this.fromStation,
-    required this.toStation,
-    required this.scrollController,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      child: ListView(
-        controller: scrollController,
-        children: [
-          const Text(
-            'Dettagli Viaggio',
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 16),
-          const Text(
-            'Tutte le fermate:',
-            style: TextStyle(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          ...ticket.stops.map((stop) => Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Row(
-              children: [
-                Icon(
-                  stop.station == ticket.from ? Icons.departure_board :
-                  (stop.station == ticket.to ? Icons.flag : Icons.train),
-                  color: stop.station == fromStation || stop.station == toStation
-                      ? const Color(0xFF00BFA5)
-                      : Colors.grey,
+        builder: (context, scrollController) => Container(
+          padding: const EdgeInsets.all(16),
+          child: ListView(
+            controller: scrollController,
+            children: [
+              const Text(
+                'Dettagli Viaggio',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
                 ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        stop.station,
-                        style: TextStyle(
-                          fontWeight: stop.station == fromStation || 
-                                     stop.station == toStation
-                              ? FontWeight.bold
-                              : FontWeight.normal,
-                        ),
+              ),
+              const SizedBox(height: 24),
+              const Text(
+                'Tutte le fermate:',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 16),
+              ...ticket.stops.map((stop) => Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Row(
+                  children: [
+                    Icon(
+                      stop.station == ticket.stops.first.station 
+                          ? Icons.departure_board
+                          : (stop.station == ticket.stops.last.station 
+                              ? Icons.flag 
+                              : Icons.train),
+                      color: stop.station == _fromStation || 
+                             stop.station == _toStation
+                          ? const Color(0xFF00BFA5)
+                          : Colors.grey,
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            stop.station,
+                            style: TextStyle(
+                              fontWeight: stop.station == _fromStation || 
+                                         stop.station == _toStation
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
+                            ),
+                          ),
+                          Text(
+                            stop.time,
+                            style: const TextStyle(color: Colors.grey),
+                          ),
+                        ],
                       ),
-                      Text(
-                        stop.formattedTime,
-                        style: const TextStyle(color: Colors.grey),
-                      ),
-                    ],
+                    ),
+                  ],
+                ),
+              )).toList(),
+              const Divider(height: 32),
+              ListTile(
+                leading: const Icon(Icons.calendar_today),
+                title: const Text('Data'),
+                subtitle: Text(_formatDate(DateTime.parse(ticket.date))),
+              ),
+              ListTile(
+                leading: const Icon(Icons.euro),
+                title: const Text('Prezzo'),
+                subtitle: Text('€${ticket.price}'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.person),
+                title: const Text('Venditore'),
+                subtitle: Text(ticket.seller),
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Acquisto completato con successo!'),
+                      backgroundColor: Color(0xFF00BFA5),
+                    ),
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF00BFA5),
+                  minimumSize: const Size(double.infinity, 50),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(25),
                   ),
                 ),
-              ],
-            ),
-          )).toList(),
-          const SizedBox(height: 16),
-          const Divider(),
-          ListTile(
-            leading: const Icon(Icons.calendar_today),
-            title: const Text('Data'),
-            subtitle: Text(ticket.date),
-          ),
-          ListTile(
-            leading: const Icon(Icons.euro),
-            title: const Text('Prezzo'),
-            subtitle: Text('€${ticket.price}'),
-          ),
-          ListTile(
-            leading: const Icon(Icons.person),
-            title: const Text('Venditore'),
-            subtitle: Text(ticket.seller),
-          ),
-          const SizedBox(height: 16),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Acquisto completato con successo!'),
-                  backgroundColor: Color(0xFF00BFA5),
+                child: const Text(
+                  'Acquista Biglietto',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
                 ),
-              );
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF00BFA5),
-              minimumSize: const Size(double.infinity, 50),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(25),
               ),
-            ),
-            child: const Text('Acquista Biglietto'),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

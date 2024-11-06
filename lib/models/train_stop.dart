@@ -1,9 +1,8 @@
-// lib/models/train_stop.dart
 import 'package:flutter/material.dart';
 
 class TrainStop {
   final String station;
-  final String time;
+  final String time;  // Format: "HH:mm"
   final bool isStart;
   final bool isEnd;
 
@@ -14,14 +13,14 @@ class TrainStop {
     this.isEnd = false,
   });
 
-  // Convert TimeOfDay to String
+  // Convert TimeOfDay to String in HH:mm format
   static String formatTime(TimeOfDay timeOfDay) {
     final hour = timeOfDay.hour.toString().padLeft(2, '0');
     final minute = timeOfDay.minute.toString().padLeft(2, '0');
     return '$hour:$minute';
   }
 
-  // Convert String to TimeOfDay
+  // Convert String (HH:mm) to TimeOfDay
   TimeOfDay get timeOfDay {
     final parts = time.split(':');
     return TimeOfDay(
